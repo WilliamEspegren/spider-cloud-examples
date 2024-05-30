@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Spider } from '@spider-cloud/spider-client';
 
-const app = new Spider()
+const spider = new Spider()
 
 // Define the POST method handler
 export async function POST(request: Request) {
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
             fetch_page_content: false
         }
 
-        const search_results = await app.search(search_query, params)
+        const search_results = await spider.search(search_query, params)
         console.log(search_results)
         // Handle the search query, perform operations, etc.
 
