@@ -2,24 +2,27 @@ import { NextResponse } from 'next/server';
 import { Spider } from '@spider-cloud/spider-client';
 import { v4 as uuidv4 } from 'uuid';
 
-const spider = new Spider()
+const spider = new Spider();
 
 // Define the POST method handler
 export async function POST(request: Request) {
     try {
         const { search_query } = await request.json();
+        if (!search_query) {
+            return NextResponse.json({ error: 'search_query is required' }, { status: 400 });
+        }
+
         const params = {
             limit: 1,
             return_format: 'markdown',
-        }
+        };
 
-        const search_results = await spider.search(search_query, params)
+        const search_results = await spider.search(search_query, params);
         // Handle the search query, perform operations, etc.
         const sessionId = generateSessionId(); // Generate a random sessionId
         const vectors = [];
 
-        for (let i = 0; i < search_results.length; i++) {
-            const result = search_results[i];
+        for (const result of search_results) {
             // Vectorize the content
             const vector = await fetch(`${process.env.BASE_URL}/api/vectorize`, {
                 method: 'POST',
@@ -29,7 +32,7 @@ export async function POST(request: Request) {
                 body: JSON.stringify({ sessionId, content: result.content }), // Include sessionId in the body
             })
             .then((response) => response.json())
-            .then((data) => data.embedding)
+            .then((data) => ({ ...data, content: result.content }))
             .catch((error) => console.error('Error:', error));
 
             vectors.push(vector); // Store the vector in an array

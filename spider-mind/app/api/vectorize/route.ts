@@ -43,6 +43,10 @@ let pineconeIndexPromise = initializePinecone();
 export async function POST(request: Request) {
     try {
         const { content, sessionId } = await request.json();
+        if (!content || !sessionId) {
+            throw new Error('Content and sessionId are required');
+        }
+
         const { embedding } = await embed({
             model: openai.embedding('text-embedding-3-small'),
             value: content,
@@ -54,8 +58,9 @@ export async function POST(request: Request) {
         // Upsert the embedding into the Pinecone index within the specified session (namespace)
         await index.namespace(sessionId).upsert([
             {
-                id: new Date().getTime().toString(), // use a unique ID, here using timestamp
-                values: embedding
+                id: new Date().getTime().toString(), 
+                values: embedding,
+                metadata: { content } // Store the original content as metadata
             }
         ]);
 
@@ -73,8 +78,11 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url);
         const query = searchParams.get('query');
         const sessionId = searchParams.get('sessionId');
-        console.log('Query:', query);
-        console.log('Session ID:', sessionId)
+
+        if (!query || !sessionId) {
+            // Send a JSON response
+            return NextResponse.json({ error: 'Session ID and query are required' }, { status: 400 });
+        }
 
         // Generate embedding for the query
         const { embedding } = await embed({
@@ -85,15 +93,11 @@ export async function GET(request: Request) {
         // Wait for Pinecone index to be initialized
         const index = await pineconeIndexPromise;
 
-        if (!sessionId || !query) {
-            // Send a JSON response
-            return NextResponse.json({ error: 'Session ID and query are required' }, { status: 400 });
-        }
-
         // Query the index within the specified session (namespace)
         const queryResult = await index.namespace(sessionId).query({
             topK: 5,
-            vector: embedding
+            vector: embedding,
+            includeMetadata: true
         });
         console.log('Query results:', queryResult.matches);
 
