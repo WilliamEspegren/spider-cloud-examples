@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Spider } from '@spider-cloud/spider-client';
+import { v4 as uuidv4 } from 'uuid';
 
 const spider = new Spider()
 
@@ -14,26 +15,48 @@ export async function POST(request: Request) {
 
         const search_results = await spider.search(search_query, params)
         // Handle the search query, perform operations, etc.
+        const sessionId = generateSessionId(); // Generate a random sessionId
+        const vectors = [];
+
         for (let i = 0; i < search_results.length; i++) {
             const result = search_results[i];
             // Vectorize the content
-            console.log(process.env.BASE_URL)
             const vector = await fetch(`${process.env.BASE_URL}/api/vectorize`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ content: result.content }),
+                body: JSON.stringify({ sessionId, content: result.content }), // Include sessionId in the body
             })
             .then((response) => response.json())
-            .then((data) => console.log(data))
+            .then((data) => data.embedding)
             .catch((error) => console.error('Error:', error));
+
+            vectors.push(vector); // Store the vector in an array
         }
 
+        // Query the vectors in the current session
+        const query = search_query; // Use the search query as the query
+        const queryResults = await fetch(`${process.env.BASE_URL}/api/vectorize?sessionId=${sessionId}&query=${encodeURIComponent(query)}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then((response) => response.json())
+        .then((data) => data.queryData)
+        .catch((error) => console.error('Error:', error));
+
         // Send a JSON response
-        return NextResponse.json({ message: 'Search successful', search_results: search_results });
+        return NextResponse.json({ message: 'Search successful', search_results: search_results, vectors: vectors, queryResults: queryResults });
     } catch (error) {
         console.error('Error handling request:', error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
+}
+
+function generateSessionId() {
+    // Generate a random sessionId using a suitable algorithm
+    // For example, you can use the uuid library to generate a UUID
+    return uuidv4();
 }

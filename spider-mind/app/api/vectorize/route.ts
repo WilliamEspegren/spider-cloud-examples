@@ -33,7 +33,7 @@ async function initializePinecone() {
         console.log(`Index ${indexName} already exists.`);
     }
 
-    return pinecone.Index(indexName);
+    return pinecone.index(indexName);
 }
 
 // Initialize Pinecone index once at startup
@@ -42,7 +42,7 @@ let pineconeIndexPromise = initializePinecone();
 // Define the POST method handler
 export async function POST(request: Request) {
     try {
-        const { content } = await request.json();
+        const { content, sessionId } = await request.json();
         const { embedding } = await embed({
             model: openai.embedding('text-embedding-3-small'),
             value: content,
@@ -51,18 +51,54 @@ export async function POST(request: Request) {
         // Wait for Pinecone index to be initialized
         const index = await pineconeIndexPromise;
 
-        // Upsert the embedding into the Pinecone index
-        await index.upsert([{ id: new Date().getTime().toString(), values: embedding }]);
+        // Upsert the embedding into the Pinecone index within the specified session (namespace)
+        await index.namespace(sessionId).upsert([
+            {
+                id: new Date().getTime().toString(), // use a unique ID, here using timestamp
+                values: embedding
+            }
+        ]);
 
-        // Optional: Query the index for similar embeddings
-        const queryResult = await index.query({
+        // Send a JSON response
+        return NextResponse.json({ message: 'Vectorization successful', embedding: embedding });
+    } catch (error) {
+        console.error('Error handling request:', error);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+}
+
+// Define the GET method handler to query the vectors in the current session
+export async function GET(request: Request) {
+    try {
+        const { searchParams } = new URL(request.url);
+        const query = searchParams.get('query');
+        const sessionId = searchParams.get('sessionId');
+        console.log('Query:', query);
+        console.log('Session ID:', sessionId)
+
+        // Generate embedding for the query
+        const { embedding } = await embed({
+            model: openai.embedding('text-embedding-3-small'),
+            value: query,
+        });
+
+        // Wait for Pinecone index to be initialized
+        const index = await pineconeIndexPromise;
+
+        if (!sessionId || !query) {
+            // Send a JSON response
+            return NextResponse.json({ error: 'Session ID and query are required' }, { status: 400 });
+        }
+
+        // Query the index within the specified session (namespace)
+        const queryResult = await index.namespace(sessionId).query({
             topK: 5,
             vector: embedding
         });
         console.log('Query results:', queryResult.matches);
 
         // Send a JSON response
-        return NextResponse.json({ message: 'Vectorization successful', embedding: embedding, queryData: queryResult.matches });
+        return NextResponse.json({ message: 'Query successful', queryData: queryResult.matches });
     } catch (error) {
         console.error('Error handling request:', error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
