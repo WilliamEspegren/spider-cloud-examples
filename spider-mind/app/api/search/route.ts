@@ -10,12 +10,25 @@ export async function POST(request: Request) {
         const params = {
             limit: 1,
             return_format: 'markdown',
-            fetch_page_content: false
         }
 
         const search_results = await spider.search(search_query, params)
-        console.log(search_results)
         // Handle the search query, perform operations, etc.
+        for (let i = 0; i < search_results.length; i++) {
+            const result = search_results[i];
+            // Vectorize the content
+            console.log(process.env.BASE_URL)
+            const vector = await fetch(`${process.env.BASE_URL}/api/vectorize`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ content: result.content }),
+            })
+            .then((response) => response.json())
+            .then((data) => console.log(data))
+            .catch((error) => console.error('Error:', error));
+        }
 
         // Send a JSON response
         return NextResponse.json({ message: 'Search successful', search_results: search_results });
