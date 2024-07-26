@@ -3,6 +3,8 @@
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { FormEvent, useState } from 'react';
 import Spinner from './loader';
+import { readStreamableValue } from 'ai/rsc';
+import { generate } from '@/app/api/gpt-response/route';
 
 interface SearchResult {
   description: string;
@@ -13,6 +15,7 @@ interface SearchResult {
 export default function Search({ placeholder }: { placeholder: string }) {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [generation, setGeneration] = useState<string>('');
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -59,6 +62,21 @@ export default function Search({ placeholder }: { placeholder: string }) {
         />
         <MagnifyingGlassIcon className="absolute left-3 h-[18px] w-[18px] -translate-y-7 text-gray-500 peer-focus:text-gray-900" />
       </form>
+      <div>
+      <button
+        onClick={async () => {
+          const { output } = await generate(["test"],'Write a 500 word text about the future of the internet');
+
+          for await (const delta of readStreamableValue(output)) {
+            setGeneration(currentGeneration => `${currentGeneration}${delta}`);
+          }
+        }}
+      >
+        Ask
+      </button>
+
+      <div>{generation}</div>
+    </div>
       {loading && <Spinner />} {/* Conditionally render loading icon */}
       {searchResults.length > 0 && !loading && (
         <div className="mt-4">
